@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+    <html lang="ru">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Админка | PhotoGallery</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: #0a0a0a;
+                color: #fff;
+                line-height: 1.6;
+            }
+
+            .container {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 2rem;
+            }
+
+            /* Login Screen */
+            .login-screen {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: #0a0a0a;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;
+            }
+
+            .login-box {
+                background: #1a1a1a;
+                padding: 2rem;
+                border-radius: 12px;
+                width: 100%;
+                max-width: 400px;
+                text-align: center;
+            }
+
+            .login-box h2 {
+                margin-bottom: 1rem;
+            }
+
+            .login-box input {
+                width: 100%;
+                padding: 0.75rem;
+                margin: 0.5rem 0;
+                background: #2a2a2a;
+                border: 1px solid #3a3a3a;
+                border-radius: 8px;
+                color: #fff;
+                font-size: 1rem;
+            }
+
+            .login-box button {
+                width: 100%;
+                padding: 0.75rem;
+                margin-top: 1rem;
+                background: #fff;
+                color: #000;
+                border: none;
+                border-radius: 8px;
+                font-size: 1rem;
+                cursor: pointer;
+            }
+
+            .login-box .error {
+                color: #dc2626;
+                margin-top: 0.5rem;
+                font-size: 0.9rem;
+            }
+
+            /* Admin Panel */
+            .admin-panel {
+                display: none;
+            }
+
+            .header {
+                background: #1a1a1a;
+                padding: 1rem 2rem;
+                border-bottom: 1px solid #333;
+                margin-bottom: 2rem;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .nav {
+                display: flex;
+                gap: 1rem;
+                margin-top: 0.5rem;
+            }
+
+            .nav a {
+                color: #888;
+                text-decoration: none;
+            }
+
+            .nav a:hover {
+                color: #fff;
+            }
+
+            .card {
+                background: #1a1a1a;
+                border-radius: 12px;
+                padding: 1.5rem;
+                margin-bottom: 2rem;
+            }
+
+            .card h2 {
+                margin-bottom: 1rem;
+                font-size: 1.2rem;
+            }
+
+            .button-group {
+                display: flex;
+                gap: 1rem;
+                flex-wrap: wrap;
+                margin-top: 1rem;
+            }
+
+            .btn {
+                padding: 0.75rem 1.5rem;
+                border: none;
+                border-radius: 8px;
+                font-size: 1rem;
+                cursor: pointer;
+                transition: all 0.3s;
+            }
+
+            .btn-primary {
+                background: #fff;
+                color: #000;
+            }
+
+            .btn-primary:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
+            }
+
+            .btn-danger {
+                background: #dc2626;
+                color: #fff;
+            }
+
+            .btn-danger:hover {
+                background: #b91c1c;
+            }
+
+            .btn-secondary {
+                background: #2a2a2a;
+                color: #fff;
+            }
+
+            .btn-secondary:hover {
+                background: #3a3a3a;
+            }
+
+            .photo-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                gap: 1rem;
+                margin-top: 1rem;
+                max-height: 500px;
+                overflow-y: auto;
+            }
+
+            .photo-item {
+                background: #2a2a2a;
+                border-radius: 8px;
+                overflow: hidden;
+                position: relative;
+                cursor: pointer;
+                transition: transform 0.2s;
+            }
+
+            .photo-item:hover {
+                transform: scale(1.02);
+            }
+
+            .photo-item.selected {
+                border: 2px solid #fff;
+            }
+
+            .photo-item img {
+                width: 100%;
+                height: 150px;
+                object-fit: cover;
+            }
+
+            .photo-item .info {
+                padding: 0.5rem;
+                font-size: 0.8rem;
+            }
+
+            .photo-item .checkbox {
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                width: 24px;
+                height: 24px;
+                background: rgba(0, 0, 0, 0.6);
+                border-radius: 4px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .photo-item.selected .checkbox::after {
+                content: "✓";
+                color: #fff;
+            }
+
+            .status {
+                padding: 0.75rem;
+                border-radius: 8px;
+                margin-top: 1rem;
+                display: none;
+            }
+
+            .status.success {
+                background: #10b981;
+                display: block;
+            }
+
+            .status.error {
+                background: #dc2626;
+                display: block;
+            }
+
+            .status.loading {
+                background: #3b82f6;
+                display: block;
+            }
+
+            input[type="text"],
+            input[type="file"],
+            select {
+                width: 100%;
+                padding: 0.75rem;
+                background: #2a2a2a;
+                border: 1px solid #3a3a3a;
+                border-radius: 8px;
+                color: #fff;
+                margin-bottom: 1rem;
+            }
+
+            .category-input-group {
+                display: flex;
+                gap: 1rem;
+                flex-wrap: wrap;
+            }
+
+            .category-input-group input {
+                flex: 1;
+                margin-bottom: 0;
+            }
+
+            @media (max-width: 768px) {
+                .container {
+                    padding: 1rem;
+                }
+
+                .button-group {
+                    flex-direction: column;
+                }
+
+                .category-input-group {
+                    flex-direction: column;
+                }
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="login-screen" id="loginScreen">
+            <div class="login-box">
+                <h2>🔐 Админ-доступ</h2>
+                <input type="password" id="password" placeholder="Введите пароль"
+                    onkeypress="if(event.key==='Enter') checkPassword()">
+                <button onclick="checkPassword()">Войти</button>
+                <div id="loginError" class="error"></div>
+            </div>
+        </div>
+
+        <div class="admin-panel" id="adminPanel">
+            <div class="header">
+                <h1>🛠️ Админ-панель PhotoGallery</h1>
+                <div class="nav">
+                    <a href="index.html">← Вернуться в галерею</a>
+                    <a href="stats.html">📊 Статистика</a>
+                    <button class="btn-secondary" style="padding: 0.25rem 0.75rem;" onclick="logout()">🚪 Выйти</button>
+                </div>
+            </div>
+
+            <div class="container">
+                <!-- Управление галереей -->
+                <div class="card">
+                    <h2>📸 Управление галереей</h2>
+                    <div class="button-group">
+                        <button class="btn btn-primary" onclick="generateGallery()">🔄 Сгенерировать галерею</button>
+                        <button class="btn btn-secondary" onclick="loadPhotoList()">📋 Обновить список фото</button>
+                    </div>
+                    <div id="generateStatus" class="status"></div>
+                </div>
+
+                <!-- Загрузка фото -->
+                <div class="card">
+                    <h2>📤 Загрузить фото</h2>
+                    <select id="categorySelect"
+                        style="width: 100%; padding: 0.75rem; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 8px; color: #fff; margin-bottom: 1rem;">
+                        <option value="">Выберите категорию...</option>
+                    </select>
+                    <input type="text" id="subcategoryInput" placeholder="Подкатегория (опционально, например: Foxes)">
+                    <input type="file" id="fileInput" multiple accept="image/jpeg,image/jpg,image/png">
+                    <button class="btn btn-primary" onclick="uploadPhotos()">📤 Загрузить</button>
+                    <div id="uploadStatus" class="status"></div>
+                </div>
+
+                <!-- Добавление категории -->
+                <div class="card">
+                    <h2>📁 Добавить категорию</h2>
+                    <div class="category-input-group">
+                        <input type="text" id="newCategoryKey" placeholder="Ключ категории (например: macro)">
+                        <input type="text" id="newCategoryName" placeholder="Название (например: Макро)">
+                        <input type="text" id="newCategoryIcon" placeholder="Иконка (например: 🔬)" value="📁">
+                    </div>
+                    <button class="btn btn-secondary" onclick="addCategory()">➕ Добавить категорию</button>
+                    <div id="categoryStatus" class="status"></div>
+                </div>
+
+                <!-- Удаление фото -->
+                <div class="card">
+                    <h2>🗑️ Удалить фото</h2>
+                    <div class="button-group">
+                        <button class="btn btn-secondary" onclick="loadPhotoList()">📋 Загрузить список</button>
+                        <button class="btn btn-danger" onclick="deleteSelected()">🗑️ Удалить выбранные</button>
+                    </div>
+                    <div id="photoList" class="photo-grid"></div>
+                    <div id="deleteStatus" class="status"></div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let sessionToken = null;
+            let selectedPhotos = new Set();
+            let currentPhotoList = [];
+
+            // Проверка пароля через API
+            async function checkPassword() {
+                const password = document.getElementById('password').value;
+                const errorDiv = document.getElementById('loginError');
+
+                try {
+                    const response = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ password: password })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        sessionToken = result.token;
+                        document.getElementById('loginScreen').style.display = 'none';
+                        document.getElementById('adminPanel').style.display = 'block';
+                        loadCategories();
+                        loadPhotoList();
+                    } else {
+                        errorDiv.textContent = '❌ Неверный пароль!';
+                        setTimeout(() => { errorDiv.textContent = ''; }, 3000);
+                    }
+                } catch (error) {
+                    errorDiv.textContent = '❌ Ошибка соединения с сервером';
+                    console.error('Login error:', error);
+                }
+            }
+
+            // Выход
+            function logout() {
+                sessionToken = null;
+                document.getElementById('adminPanel').style.display = 'none';
+                document.getElementById('loginScreen').style.display = 'flex';
+                document.getElementById('password').value = '';
+            }
+
+            // Заголовки с авторизацией
+            function getAuthHeaders() {
+                return {
+                    'Content-Type': 'application/json',
+                    'X-Auth-Token': sessionToken
+                };
+            }
+
+            // Загрузка категорий
+            async function loadCategories() {
+                try {
+                    const response = await fetch('/api/categories', {
+                        headers: { 'X-Auth-Token': sessionToken }
+                    });
+                    const categories = await response.json();
+                    const select = document.getElementById('categorySelect');
+                    select.innerHTML = '<option value="">Выберите категорию...</option>';
+                    categories.forEach(cat => {
+                        select.innerHTML += `<option value="${cat.key}">${cat.icon} ${cat.name}</option>`;
+                    });
+                } catch (error) {
+                    console.error('Error loading categories:', error);
+                }
+            }
+
+            // Загрузка списка фото
+            async function loadPhotoList() {
+                try {
+                    const response = await fetch('/api/photos', {
+                        headers: { 'X-Auth-Token': sessionToken }
+                    });
+                    currentPhotoList = await response.json();
+                    renderPhotoList();
+                } catch (error) {
+                    console.error('Error loading photos:', error);
+                    document.getElementById('photoList').innerHTML = '<div style="text-align:center; padding:2rem;">Ошибка загрузки списка фото</div>';
+                }
+            }
+
+            // Рендер списка фото
+            function renderPhotoList() {
+                const container = document.getElementById('photoList');
+                if (currentPhotoList.length === 0) {
+                    container.innerHTML = '<div style="text-align:center; padding:2rem;">Нет фото</div>';
+                    return;
+                }
+                container.innerHTML = currentPhotoList.map(photo => `
+                <div class="photo-item ${selectedPhotos.has(photo.path) ? 'selected' : ''}" onclick="toggleSelect('${photo.path.replace(/'/g, "\\'")}')">
+                    <img src="${photo.thumbnail}" alt="${photo.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23888\' stroke-width=\'2\'%3E%3Crect x=\'2\' y=\'2\' width=\'20\' height=\'20\'/%3E%3C/svg%3E'">
+                    <div class="info">
+                        <div class="file-name">${photo.name}</div>
+                        <div class="file-size">${photo.category}${photo.subcategory ? '/' + photo.subcategory : ''}</div>
+                    </div>
+                    <div class="checkbox"></div>
+                </div>
+            `).join('');
+            }
+
+            // Выбор фото
+            function toggleSelect(path) {
+                if (selectedPhotos.has(path)) {
+                    selectedPhotos.delete(path);
+                } else {
+                    selectedPhotos.add(path);
+                }
+                renderPhotoList();
+            }
+
+            // Удаление выбранных фото
+            async function deleteSelected() {
+                if (selectedPhotos.size === 0) {
+                    alert('Выберите фото для удаления');
+                    return;
+                }
+
+                if (!confirm(`Удалить ${selectedPhotos.size} фото?`)) return;
+
+                const status = document.getElementById('deleteStatus');
+                status.className = 'status loading';
+                status.textContent = '🔄 Удаление...';
+                status.style.display = 'block';
+
+                try {
+                    const response = await fetch('/api/delete', {
+                        method: 'POST',
+                        headers: getAuthHeaders(),
+                        body: JSON.stringify({ photos: Array.from(selectedPhotos) })
+                    });
+                    const result = await response.json();
+
+                    if (result.success) {
+                        status.className = 'status success';
+                        status.textContent = `✅ Удалено ${result.deleted} фото`;
+                        selectedPhotos.clear();
+                        loadPhotoList();
+                    } else {
+                        throw new Error(result.error);
+                    }
+                } catch (error) {
+                    status.className = 'status error';
+                    status.textContent = `❌ Ошибка: ${error.message}`;
+                }
+
+                setTimeout(() => { status.style.display = 'none'; }, 3000);
+            }
+
+            // Генерация галереи
+            async function generateGallery() {
+                const status = document.getElementById('generateStatus');
+                status.className = 'status loading';
+                status.textContent = '🔄 Генерация галереи...';
+                status.style.display = 'block';
+
+                try {
+                    const response = await fetch('/api/generate', {
+                        method: 'POST',
+                        headers: getAuthHeaders()
+                    });
+                    const result = await response.json();
+
+                    if (result.success) {
+                        status.className = 'status success';
+                        status.textContent = `✅ ${result.message}`;
+                    } else {
+                        throw new Error(result.error);
+                    }
+                } catch (error) {
+                    status.className = 'status error';
+                    status.textContent = `❌ Ошибка: ${error.message}`;
+                }
+
+                setTimeout(() => { status.style.display = 'none'; }, 3000);
+            }
+
+            // Загрузка фото
+            async function uploadPhotos() {
+                const category = document.getElementById('categorySelect').value;
+                const subcategory = document.getElementById('subcategoryInput').value;
+                const files = document.getElementById('fileInput').files;
+
+                if (!category) {
+                    alert('Выберите категорию');
+                    return;
+                }
+                if (files.length === 0) {
+                    alert('Выберите файлы');
+                    return;
+                }
+
+                const status = document.getElementById('uploadStatus');
+                status.className = 'status loading';
+                status.textContent = `🔄 Загрузка ${files.length} файлов...`;
+                status.style.display = 'block';
+
+                const formData = new FormData();
+                formData.append('category', category);
+                formData.append('subcategory', subcategory);
+                for (let i = 0; i < files.length; i++) {
+                    formData.append('photos', files[i]);
+                }
+
+                try {
+                    const response = await fetch('/api/upload', {
+                        method: 'POST',
+                        headers: { 'X-Auth-Token': sessionToken },
+                        body: formData
+                    });
+                    const result = await response.json();
+
+                    if (result.success) {
+                        status.className = 'status success';
+                        status.textContent = `✅ Загружено ${result.uploaded} фото`;
+                        document.getElementById('fileInput').value = '';
+                        loadPhotoList();
+                    } else {
+                        throw new Error(result.error);
+                    }
+                } catch (error) {
+                    status.className = 'status error';
+                    status.textContent = `❌ Ошибка: ${error.message}`;
+                }
+
+                setTimeout(() => { status.style.display = 'none'; }, 3000);
+            }
+
+            // Добавление категории
+            async function addCategory() {
+                const key = document.getElementById('newCategoryKey').value.trim();
+                const name = document.getElementById('newCategoryName').value.trim();
+                const icon = document.getElementById('newCategoryIcon').value.trim();
+
+                if (!key || !name) {
+                    alert('Заполните ключ и название категории');
+                    return;
+                }
+
+                const status = document.getElementById('categoryStatus');
+                status.className = 'status loading';
+                status.textContent = '🔄 Добавление категории...';
+                status.style.display = 'block';
+
+                try {
+                    const response = await fetch('/api/add-category', {
+                        method: 'POST',
+                        headers: getAuthHeaders(),
+                        body: JSON.stringify({ key, name, icon })
+                    });
+                    const result = await response.json();
+
+                    if (result.success) {
+                        status.className = 'status success';
+                        status.textContent = `✅ Категория "${name}" добавлена`;
+                        document.getElementById('newCategoryKey').value = '';
+                        document.getElementById('newCategoryName').value = '';
+                        loadCategories();
+                    } else {
+                        throw new Error(result.error);
+                    }
+                } catch (error) {
+                    status.className = 'status error';
+                    status.textContent = `❌ Ошибка: ${error.message}`;
+                }
+
+                setTimeout(() => { status.style.display = 'none'; }, 3000);
+            }
+        </script>
+    </body>
+
+    </html>

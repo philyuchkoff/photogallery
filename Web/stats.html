@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+
+<html lang="ru">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Статистика фотографий | Моя галерея</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            /* CSS Variables */
+            :root {
+                --bg-primary: #0a0a0a;
+                --bg-secondary: #1a1a1a;
+                --bg-card: rgba(255, 255, 255, 0.05);
+                --text-primary: #fff;
+                --text-secondary: #888;
+                --border-color: rgba(255, 255, 255, 0.1);
+                --progress-bg: rgba(255, 255, 255, 0.1);
+                --progress-fill: #fff;
+                --chart-grid: rgba(255, 255, 255, 0.1);
+            }
+
+            body.light {
+                --bg-primary: #f5f5f7;
+                --bg-secondary: #ffffff;
+                --bg-card: rgba(0, 0, 0, 0.03);
+                --text-primary: #1a1a1a;
+                --text-secondary: #666;
+                --border-color: rgba(0, 0, 0, 0.1);
+                --progress-bg: rgba(0, 0, 0, 0.1);
+                --progress-fill: #1a1a1a;
+                --chart-grid: rgba(0, 0, 0, 0.1);
+            }
+
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: var(--bg-primary);
+                color: var(--text-primary);
+                line-height: 1.6;
+                transition: background-color 0.3s, color 0.3s;
+            }
+
+            .header {
+                position: fixed;
+                top: 0;
+                width: 100%;
+                background: var(--bg-secondary);
+                backdrop-filter: blur(10px);
+                padding: 1rem 2rem;
+                z-index: 100;
+                border-bottom: 1px solid var(--border-color);
+                transition: background 0.3s;
+            }
+
+            .header-content {
+                max-width: 1400px;
+                margin: 0 auto;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+                font-weight: 500;
+                letter-spacing: -0.5px;
+            }
+
+            .nav {
+                display: flex;
+                gap: 2rem;
+                align-items: center;
+            }
+
+            .nav a {
+                color: var(--text-secondary);
+                text-decoration: none;
+                transition: color 0.3s;
+            }
+
+            .nav a:hover,
+            .nav a.active {
+                color: var(--text-primary);
+            }
+
+            .theme-toggle {
+                background: var(--bg-card);
+                border: 1px solid var(--border-color);
+                border-radius: 30px;
+                padding: 0.5rem;
+                cursor: pointer;
+                display: flex;
+                gap: 0.5rem;
+                transition: all 0.3s;
+            }
+
+            .theme-toggle:hover {
+                transform: scale(1.05);
+            }
+
+            .theme-option {
+                padding: 0.25rem 0.75rem;
+                border-radius: 20px;
+                font-size: 0.9rem;
+                transition: all 0.3s;
+                color: var(--text-secondary);
+            }
+
+            .theme-option.active {
+                background: var(--text-primary);
+                color: var(--bg-primary);
+            }
+
+            .container {
+                padding: 100px 2rem 2rem;
+                max-width: 1400px;
+                margin: 0 auto;
+            }
+
+            .stats-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 1.5rem;
+                margin-bottom: 2rem;
+            }
+
+            .stat-card {
+                background: var(--bg-card);
+                border-radius: 12px;
+                padding: 1.5rem;
+                backdrop-filter: blur(10px);
+                transition: transform 0.3s;
+                border: 1px solid var(--border-color);
+            }
+
+            .stat-card:hover {
+                transform: translateY(-5px);
+                background: var(--bg-secondary);
+            }
+
+            .stat-card h3 {
+                color: var(--text-secondary);
+                font-size: 0.9rem;
+                margin-bottom: 0.5rem;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+            .stat-number {
+                font-size: 2.5rem;
+                font-weight: 700;
+                margin-bottom: 0.5rem;
+            }
+
+            .stat-unit {
+                font-size: 0.9rem;
+                color: var(--text-secondary);
+            }
+
+            .charts-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+                gap: 2rem;
+                margin-top: 2rem;
+            }
+
+            .chart-container {
+                background: var(--bg-card);
+                border-radius: 12px;
+                padding: 1.5rem;
+                border: 1px solid var(--border-color);
+            }
+
+            .chart-container h2 {
+                font-size: 1.2rem;
+                margin-bottom: 1rem;
+                color: var(--text-primary);
+            }
+
+            canvas {
+                max-height: 400px;
+                width: 100%;
+            }
+
+            .top-list {
+                background: var(--bg-card);
+                border-radius: 12px;
+                padding: 1.5rem;
+                border: 1px solid var(--border-color);
+            }
+
+            .top-list h2 {
+                font-size: 1.2rem;
+                margin-bottom: 1rem;
+            }
+
+            .top-item {
+                display: flex;
+                justify-content: space-between;
+                padding: 0.75rem 0;
+                border-bottom: 1px solid var(--border-color);
+            }
+
+            .top-item:last-child {
+                border-bottom: none;
+            }
+
+            .top-name {
+                font-weight: 500;
+            }
+
+            .top-count {
+                color: var(--text-secondary);
+            }
+
+            .progress-bar {
+                height: 4px;
+                background: var(--progress-bg);
+                border-radius: 2px;
+                margin-top: 0.5rem;
+                overflow: hidden;
+            }
+
+            .progress-fill {
+                height: 100%;
+                background: var(--progress-fill);
+                border-radius: 2px;
+                transition: width 0.3s;
+            }
+
+            .loading {
+                text-align: center;
+                padding: 2rem;
+                color: var(--text-secondary);
+            }
+
+            @media (max-width: 768px) {
+                .container {
+                    padding: 90px 1rem 1rem;
+                }
+
+                .charts-grid {
+                    grid-template-columns: 1fr;
+                }
+
+                .header-content {
+                    flex-direction: column;
+                    text-align: center;
+                }
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="header">
+            <div class="header-content">
+                <h1>📊 Фотостатистика</h1>
+                <div class="nav">
+                    <a href="index.html">Галерея</a>
+                    <a href="stats.html" class="active">Статистика</a>
+                    <div class="theme-toggle">
+                        <span class="theme-option" data-theme="dark">🌙 Тёмная</span>
+                        <span class="theme-option" data-theme="light">☀️ Светлая</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div id="stats-content">
+                <div class="loading">Загрузка статистики...</div>
+            </div>
+        </div>
+
+        <script>
+            let statsData = null;
+            let charts = {};
+
+            function setTheme(theme) {
+                if (theme === 'light') {
+                    document.body.classList.add('light');
+                } else {
+                    document.body.classList.remove('light');
+                }
+                localStorage.setItem('theme', theme);
+
+                document.querySelectorAll('.theme-option').forEach(opt => {
+                    if (opt.dataset.theme === theme) {
+                        opt.classList.add('active');
+                    } else {
+                        opt.classList.remove('active');
+                    }
+                });
+
+                // Перерисовываем графики с новыми цветами
+                if (statsData) {
+                    Object.values(charts).forEach(chart => chart.destroy());
+                    initCharts();
+                }
+            }
+
+            function initTheme() {
+                const savedTheme = localStorage.getItem('theme') || 'dark';
+                setTheme(savedTheme);
+
+                document.querySelectorAll('.theme-option').forEach(opt => {
+                    opt.addEventListener('click', () => {
+                        setTheme(opt.dataset.theme);
+                    });
+                });
+            }
+
+            async function loadStats() {
+                try {
+                    const response = await fetch('stats.json');
+                    statsData = await response.json();
+                    renderStats();
+                } catch (error) {
+                    console.error('Error loading stats:', error);
+                    document.getElementById('stats-content').innerHTML =
+                        '<div class="loading">Ошибка загрузки статистики. Запустите build_gallery.sh для генерации данных.</div>';
+                }
+            }
+
+            function renderStats() {
+                const content = document.getElementById('stats-content');
+
+                const totalSizeGB = (statsData.total_size_mb / 1024).toFixed(2);
+
+                const cardsHtml = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Всего фотографий</h3>
+                        <div class="stat-number">${statsData.total_photos}</div>
+                        <div class="stat-unit">обработанных фото</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Общий объем</h3>
+                        <div class="stat-number">${totalSizeGB}</div>
+                        <div class="stat-unit">гигабайт</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Период съемки</h3>
+                        <div class="stat-number">${statsData.date_range?.years_active || '—'}</div>
+                        <div class="stat-unit">лет активности</div>
+                        <div style="font-size:0.8rem; margin-top:0.5rem;">
+                            ${statsData.date_range?.oldest || '—'} — ${statsData.date_range?.newest || '—'}
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Среднее фото</h3>
+                        <div class="stat-number">${(statsData.total_size_mb / statsData.total_photos).toFixed(1)}</div>
+                        <div class="stat-unit">MB</div>
+                    </div>
+                </div>
+            `;
+
+                const chartsHtml = `
+                <div class="charts-grid">
+                    <div class="chart-container">
+                        <h2>📅 Хронология загрузок</h2>
+                        <canvas id="timeline-chart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h2>📸 Распределение по камерам</h2>
+                        <canvas id="cameras-chart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h2>🔭 Популярные объективы</h2>
+                        <canvas id="lenses-chart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h2>🏷️ Категории</h2>
+                        <canvas id="categories-chart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <h2>⭐ Распределение рейтингов</h2>
+                        <canvas id="ratings-chart"></canvas>
+                    </div>
+                </div>
+            `;
+
+                const topCameras = Object.entries(statsData.cameras || {})
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5);
+
+                const topLenses = Object.entries(statsData.lenses || {})
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 5);
+
+                const topListsHtml = `
+                <div class="charts-grid" style="margin-top: 2rem;">
+                    <div class="top-list">
+                        <h2>🏆 Топ-5 камер</h2>
+                        ${topCameras.map(([name, count], i) => `
+                            <div class="top-item">
+                                <div>
+                                    <span class="top-name">${i + 1}. ${name}</span>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: ${(count / topCameras[0][1]) * 100}%"></div>
+                                    </div>
+                                </div>
+                                <span class="top-count">${count} фото (${((count / statsData.total_photos) * 100).toFixed(1)}%)</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="top-list">
+                        <h2>🏆 Топ-5 объективов</h2>
+                        ${topLenses.map(([name, count], i) => `
+                            <div class="top-item">
+                                <div>
+                                    <span class="top-name">${i + 1}. ${name || 'Неизвестно'}</span>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: ${(count / topLenses[0][1]) * 100}%"></div>
+                                    </div>
+                                </div>
+                                <span class="top-count">${count} фото (${((count / statsData.total_photos) * 100).toFixed(1)}%)</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+                content.innerHTML = cardsHtml + chartsHtml + topListsHtml;
+                initCharts();
+            }
+
+            function initCharts() {
+                const isLight = document.body.classList.contains('light');
+                const textColor = isLight ? '#666' : '#888';
+                const gridColor = isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.1)';
+                const borderColor = isLight ? '#1a1a1a' : '#fff';
+
+                // Таймлайн
+                const timeline = statsData.timeline || {};
+                const sortedDates = Object.keys(timeline).sort();
+                const timelineCtx = document.getElementById('timeline-chart')?.getContext('2d');
+                if (timelineCtx) {
+                    charts.timeline = new Chart(timelineCtx, {
+                        type: 'line',
+                        data: {
+                            labels: sortedDates,
+                            datasets: [{
+                                label: 'Фотографий',
+                                data: sortedDates.map(d => timeline[d]),
+                                borderColor: borderColor,
+                                backgroundColor: isLight ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: { labels: { color: textColor } }
+                            },
+                            scales: {
+                                y: { ticks: { color: textColor }, grid: { color: gridColor } },
+                                x: { ticks: { color: textColor, maxRotation: 45, minRotation: 45 }, grid: { display: false } }
+                            }
+                        }
+                    });
+                }
+
+                // Камеры
+                const cameras = statsData.cameras || {};
+                const topCameras = Object.entries(cameras).sort((a, b) => b[1] - a[1]).slice(0, 8);
+                const camerasCtx = document.getElementById('cameras-chart')?.getContext('2d');
+                if (camerasCtx && topCameras.length > 0) {
+                    charts.cameras = new Chart(camerasCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: topCameras.map(c => c[0]),
+                            datasets: [{
+                                label: 'Количество фото',
+                                data: topCameras.map(c => c[1]),
+                                backgroundColor: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)',
+                                borderColor: borderColor,
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: { legend: { labels: { color: textColor } } },
+                            scales: {
+                                y: { ticks: { color: textColor }, grid: { color: gridColor } },
+                                x: { ticks: { color: textColor }, grid: { display: false } }
+                            }
+                        }
+                    });
+                }
+
+                // Объективы
+                const lenses = statsData.lenses || {};
+                const topLenses = Object.entries(lenses).sort((a, b) => b[1] - a[1]).slice(0, 8);
+                const lensesCtx = document.getElementById('lenses-chart')?.getContext('2d');
+                if (lensesCtx && topLenses.length > 0) {
+                    charts.lenses = new Chart(lensesCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: topLenses.map(l => l[0].length > 30 ? l[0].substring(0, 27) + '...' : l[0]),
+                            datasets: [{
+                                label: 'Количество фото',
+                                data: topLenses.map(l => l[1]),
+                                backgroundColor: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)',
+                                borderColor: borderColor,
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: { legend: { labels: { color: textColor } } },
+                            scales: {
+                                y: { ticks: { color: textColor }, grid: { color: gridColor } },
+                                x: { ticks: { color: textColor, maxRotation: 45, minRotation: 45 }, grid: { display: false } }
+                            }
+                        }
+                    });
+                }
+
+                // Категории
+                const categories = statsData.categories || {};
+                const categoryNames = {
+                    'portfolio': 'Портфолио',
+                    'wildlife': 'Дикая природа',
+                    'landscape': 'Пейзажи',
+                    'portrait': 'Портреты',
+                    'street': 'Уличная',
+                    'other': 'Другое'
+                };
+                const categoriesCtx = document.getElementById('categories-chart')?.getContext('2d');
+                if (categoriesCtx && Object.keys(categories).length > 0) {
+                    charts.categories = new Chart(categoriesCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: Object.keys(categories).map(c => categoryNames[c] || c),
+                            datasets: [{
+                                data: Object.values(categories),
+                                backgroundColor: isLight ?
+                                    ['rgba(0,0,0,0.8)', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.1)'] :
+                                    ['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.7)', 'rgba(255,255,255,0.5)', 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0.1)'],
+                                borderColor: isLight ? '#f5f5f7' : '#0a0a0a',
+                                borderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: { labels: { color: textColor } }
+                            }
+                        }
+                    });
+                }
+
+                // Рейтинги
+                const ratings = statsData.ratings || {};
+                const ratingsCtx = document.getElementById('ratings-chart')?.getContext('2d');
+                if (ratingsCtx) {
+                    charts.ratings = new Chart(ratingsCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['★', '★★', '★★★', '★★★★', '★★★★★'],
+                            datasets: [{
+                                label: 'Количество фото',
+                                data: [1, 2, 3, 4, 5].map(r => ratings[r] || 0),
+                                backgroundColor: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,215,0,0.5)',
+                                borderColor: isLight ? '#000' : '#ffd700',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: { legend: { labels: { color: textColor } } },
+                            scales: {
+                                y: { ticks: { color: textColor }, grid: { color: gridColor } },
+                                x: { ticks: { color: isLight ? '#000' : '#ffd700', font: { size: 20 } }, grid: { display: false } }
+                            }
+                        }
+                    });
+                }
+            }
+
+            initTheme();
+            loadStats();
+        </script>
+    </body>
+
+    </html>
