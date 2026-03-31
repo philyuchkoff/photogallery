@@ -1,5 +1,8 @@
 *.backup
 README.forme.md
-*.jpg
-*.png
-.DS_Store
+# Игнорировать все jpg везде
+**/*.jpg
+# НО не игнорировать jpg в assets
+!assets/**/*.jpg
+**/*.png
+**/.DS_Store
