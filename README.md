@@ -2,7 +2,9 @@
 
 A complete static website generator for photographers to organize, display, and analyze their photo collections with automatic gallery generation, hierarchical categories, and detailed statistics.
 
-![Gallery Demo](https://via.placeholder.com/800x400?text=Gallery+Screenshot)
+![Photogallery](./assets/screen1.jpg)
+![Admin Panel](./assets/screen_admin.jpg)
+![Stat Panel](./assets/screen_stat.jpg)
 
 ## ✨ Features
 
@@ -318,8 +320,8 @@ For production, consider:
 - use included `perl` and `awk` for processing.
 
 ## License
-MIT License – free for personal and commercial use.
+[MIT License](./LICENSE) – free for personal and commercial use.
 
 Made with ❤️ for photographers
 
-Questions or suggestions? Open an issue!
+Questions or suggestions? [Open an issue](https://github.com/philyuchkoff/photogallery/issues)!
