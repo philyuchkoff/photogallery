@@ -1,9 +1,9 @@
 {
     "total_photos": 10,
-    "total_size_mb": 173.88,
+    "total_size_mb": 145.66,
     "date_range": {
         "oldest": "2026-01-31",
-        "newest": "2026-03-30",
+        "newest": "2026-08-03",
         "years_active": 0
     },
     "cameras": {
@@ -14,7 +14,8 @@
 },
     "timeline": {
     "2026-01": 1,
-    "2026-03": 9
+    "2026-08": 1,
+    "2026-03": 8
 },
     "categories": {
     "portrait": 2,
