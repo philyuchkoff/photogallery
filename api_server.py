@@ -249,6 +249,7 @@ def generate_gallery():
         else:
             return jsonify({'success': False, 'error': result.stderr})
     except Exception as e:
+        log.error('Ошибка генерации галереи: %s', e)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
