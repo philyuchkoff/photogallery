@@ -8,4 +8,5 @@ docs/plans/todo.md
 # НО не игнорировать jpg в assets
 !assets/**/*.jpg
 **/*.png
-**/.DS_Store
+**/.DS_Store__pycache__/
+*.pyc

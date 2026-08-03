@@ -9,11 +9,15 @@ import json
 import shutil
 import subprocess
 import secrets
+import logging
 from pathlib import Path
 from functools import wraps
 from werkzeug.utils import secure_filename
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder='Web')
 
@@ -55,29 +59,35 @@ def require_auth(f):
         return f(*args, **kwargs)
     return decorated
 
-# Категории по умолчанию
-CATEGORIES = [
-    {'key': 'wildlife', 'name': 'Дикая природа', 'icon': '🦊'},
-    {'key': 'portrait', 'name': 'Портреты', 'icon': '👤'},
-    {'key': 'landscape', 'name': 'Пейзажи', 'icon': '🌄'},
-    {'key': 'portfolio', 'name': 'Портфолио', 'icon': '⭐'},
-    {'key': 'street', 'name': 'Уличная', 'icon': '🚶'},
-    {'key': 'other', 'name': 'Другое', 'icon': '📁'}
+# Категории по умолчанию (используются при создании categories.json)
+DEFAULT_CATEGORIES = [
+    {'key': 'portfolio', 'name': 'Портфолио', 'icon': '⭐', 'patterns': 'Portfolio,portfolio'},
+    {'key': 'wildlife', 'name': 'Дикая природа', 'icon': '🦊', 'patterns': 'Wildlife,wildlife,WILDLIFE'},
+    {'key': 'landscape', 'name': 'Пейзажи', 'icon': '🌄', 'patterns': 'Landscape,landscape'},
+    {'key': 'portrait', 'name': 'Портреты', 'icon': '👤', 'patterns': 'Portrait,portrait,PORTRAIT'},
+    {'key': 'street', 'name': 'Уличная', 'icon': '🚶', 'patterns': 'Street,street'},
+    {'key': 'other', 'name': 'Другое', 'icon': '📁', 'patterns': ''}
 ]
 
-# Загрузка пользовательских категорий
+# Единый источник категорий — categories.json
 CATEGORIES_FILE = BASE_DIR / 'categories.json'
-if CATEGORIES_FILE.exists():
+
+
+def load_categories():
+    """Загружает категории из categories.json (создаёт файл с дефолтами при отсутствии)."""
+    if not CATEGORIES_FILE.exists():
+        with open(CATEGORIES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(DEFAULT_CATEGORIES, f, ensure_ascii=False, indent=2)
     try:
-        with open(CATEGORIES_FILE) as f:
-            user_categories = json.load(f)
-            # Объединяем, избегая дубликатов
-            existing_keys = {c['key'] for c in CATEGORIES}
-            for cat in user_categories:
-                if cat['key'] not in existing_keys:
-                    CATEGORIES.append(cat)
-    except:
-        pass
+        with open(CATEGORIES_FILE, encoding='utf-8') as f:
+            data = json.load(f)
+        return [c for c in data if isinstance(c, dict) and c.get('key')]
+    except (json.JSONDecodeError, OSError) as e:
+        log.error('Не удалось прочитать categories.json: %s', e)
+        return list(DEFAULT_CATEGORIES)
+
+
+CATEGORIES = load_categories()
 
 
 @app.route('/api/login', methods=['POST'])
@@ -255,23 +265,31 @@ def add_category():
     
     if not key or not name:
         return jsonify({'success': False, 'error': 'Key and name required'}), 400
-    
+
+    key_clean = key.lower().strip()
+    if not key_clean:
+        return jsonify({'success': False, 'error': 'Key and name required'}), 400
+
     # Проверяем, нет ли уже такой категории
-    if any(c['key'] == key for c in CATEGORIES):
-        return jsonify({'success': False, 'error': f'Category "{key}" already exists'}), 400
+    if any(c['key'] == key_clean for c in CATEGORIES):
+        return jsonify({'success': False, 'error': f'Category "{key_clean}" already exists'}), 400
     
     # Создаем папку
-    category_dir = SOURCE_DIR / key.capitalize()
+    category_dir = SOURCE_DIR / key_clean.capitalize()
     category_dir.mkdir(exist_ok=True)
     
-    # Сохраняем категорию
-    new_category = {'key': key, 'name': name, 'icon': icon}
+    # Сохраняем категорию (с паттернами по умолчанию)
+    new_category = {
+        'key': key_clean,
+        'name': name.strip(),
+        'icon': icon,
+        'patterns': f"{key_clean.capitalize()},{key_clean}"
+    }
     CATEGORIES.append(new_category)
     
-    # Сохраняем в файл
-    with open(CATEGORIES_FILE, 'w') as f:
-        json.dump([c for c in CATEGORIES if c['key'] not in ['wildlife', 'portrait', 'landscape', 'portfolio', 'street', 'other']], 
-                  f, ensure_ascii=False, indent=2)
+    # Сохраняем в файл (полный список — categories.json единый источник)
+    with open(CATEGORIES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(CATEGORIES, f, ensure_ascii=False, indent=2)
     
     return jsonify({'success': True, 'category': new_category})
 

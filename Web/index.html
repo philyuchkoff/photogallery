@@ -482,6 +482,7 @@
             <div class="lightbox-info" id="lightboxInfo"></div>
         </div>
 
+        <script src="categories.js"></script>
         <script>
             let galleryData = [];
             let currentCategory = 'all';
@@ -489,9 +490,8 @@
             let currentPhotoIndex = 0;
             let currentFilteredPhotos = [];
 
-            // Список категорий
-            const categories = [
-                { id: 'all', name: '🏠 Все', icon: '🏠' },
+            // Список категорий (единый источник — categories.js, генерируется из categories.json)
+            const defaultCategories = [
                 { id: 'portfolio', name: '⭐ Портфолио', icon: '⭐' },
                 { id: 'wildlife', name: '🦊 Дикая природа', icon: '🦊' },
                 { id: 'landscape', name: '🌄 Пейзажи', icon: '🌄' },
@@ -499,6 +499,13 @@
                 { id: 'street', name: '🚶 Уличная', icon: '🚶' },
                 { id: 'other', name: '📁 Другое', icon: '📁' }
             ];
+            const categories = [
+                { id: 'all', name: '🏠 Все', icon: '🏠' },
+                ...(window.PHOTOGALLERY_CATEGORIES || []).map(c => ({ id: c.id, name: c.icon + ' ' + c.name, icon: c.icon }))
+            ];
+            if (categories.length <= 1) {
+                categories.push(...defaultCategories);
+            }
 
             // Структура подкатегорий
             let subcategoriesMap = {};

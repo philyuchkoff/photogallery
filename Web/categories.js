@@ -1,0 +1,1 @@
+window.PHOTOGALLERY_CATEGORIES = [{"id": "portfolio", "name": "Портфолио", "icon": "⭐"}, {"id": "wildlife", "name": "Дикая природа", "icon": "🦊"}, {"id": "landscape", "name": "Пейзажи", "icon": "🌄"}, {"id": "portrait", "name": "Портреты", "icon": "👤"}, {"id": "street", "name": "Уличная", "icon": "🚶"}, {"id": "other", "name": "Другое", "icon": "📁"}];
