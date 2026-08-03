@@ -354,7 +354,8 @@ if [ -n "$oldest_date" ] && [ -n "$newest_date" ] && [ "$oldest_date" != "0000-0
 fi
 
 # Генерация stats.json
-total_size_mb=$(echo "scale=2; $total_size / 1048576" | bc 2>/dev/null || echo "0")
+# (размер в МБ считаем через awk, чтобы не зависеть от bc)
+total_size_mb=$(awk "BEGIN { printf \"%.2f\", $total_size / 1048576 }" 2>/dev/null || echo "0")
 
 cat > "$WEB_DIR/stats.json" <<EOF
 {
