@@ -23,10 +23,13 @@ WEB_DIR = BASE_DIR / 'Web'
 BUILD_SCRIPT = BASE_DIR / 'build_gallery.sh'
 
 # Получаем пароль из переменной окружения
-ADMIN_PASSWORD = os.environ.get('PHOTOGALLERY_ADMIN_PASSWORD', 'admin123')
-if ADMIN_PASSWORD == 'admin123':
-    print("⚠️  WARNING: Using default password 'admin123'")
-    print("   Set PHOTOGALLERY_ADMIN_PASSWORD environment variable for security:")
+ADMIN_PASSWORD = os.environ.get('PHOTOGALLERY_ADMIN_PASSWORD')
+if not ADMIN_PASSWORD:
+    ADMIN_PASSWORD = secrets.token_urlsafe(24)
+    print("⚠️  WARNING: PHOTOGALLERY_ADMIN_PASSWORD not set!")
+    print("   Generated a temporary random password (valid until server restart):")
+    print(f"   {ADMIN_PASSWORD}")
+    print("   Set the environment variable for a permanent password:")
     print("   export PHOTOGALLERY_ADMIN_PASSWORD='your_secure_password'")
     print("")
 
@@ -275,9 +278,9 @@ if __name__ == '__main__':
     print("")
     print("🔐 Authentication:")
     print(f"   Password from: PHOTOGALLERY_ADMIN_PASSWORD env var")
-    if ADMIN_PASSWORD == 'admin123':
-        print("   ⚠️  Using DEFAULT password: admin123")
-        print("   Set environment variable for security:")
+    if not os.environ.get('PHOTOGALLERY_ADMIN_PASSWORD'):
+        print("   ⚠️  NO password set! Using a temporary random password")
+        print("   Set PHOTOGALLERY_ADMIN_PASSWORD for a permanent password:")
         print("   export PHOTOGALLERY_ADMIN_PASSWORD='your_secure_password'")
     else:
         print("   ✅ Custom password loaded from environment")
