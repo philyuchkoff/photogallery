@@ -19,7 +19,12 @@ from flask_cors import CORS
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
+import threading
+
 app = Flask(__name__, static_folder='Web')
+
+# Статус текущей генерации галереи
+generate_status = {'running': False, 'ok': None, 'error': None}
 
 # CORS включается только для явно разрешённых origin (через PHOTOGALLERY_ALLOWED_ORIGINS,
 # список через запятую). По умолчанию отключён, т.к. клиент работает с того же origin.
@@ -235,22 +240,40 @@ def delete_photos():
 @app.route('/api/generate', methods=['POST'])
 @require_auth
 def generate_gallery():
-    """Запустить build_gallery.sh"""
-    try:
-        result = subprocess.run(
-            [str(BUILD_SCRIPT), str(SOURCE_DIR), str(WEB_DIR)],
-            capture_output=True,
-            text=True,
-            timeout=120
-        )
-        
-        if result.returncode == 0:
-            return jsonify({'success': True, 'message': 'Галерея сгенерирована'})
-        else:
-            return jsonify({'success': False, 'error': result.stderr})
-    except Exception as e:
-        log.error('Ошибка генерации галереи: %s', e)
-        return jsonify({'success': False, 'error': str(e)}), 500
+    """Запустить build_gallery.sh в фоне"""
+    if generate_status['running']:
+        return jsonify({'success': False, 'error': 'Генерация уже запущена'}), 409
+
+    def run_build():
+        generate_status['running'] = True
+        generate_status['ok'] = None
+        generate_status['error'] = None
+        try:
+            result = subprocess.run(
+                [str(BUILD_SCRIPT), str(SOURCE_DIR), str(WEB_DIR)],
+                capture_output=True,
+                text=True,
+                timeout=600
+            )
+            generate_status['ok'] = (result.returncode == 0)
+            generate_status['error'] = result.stderr if result.returncode != 0 else None
+        except Exception as e:
+            generate_status['ok'] = False
+            generate_status['error'] = str(e)
+            log.error('Ошибка генерации галереи: %s', e)
+        finally:
+            generate_status['running'] = False
+
+    thread = threading.Thread(target=run_build, daemon=True)
+    thread.start()
+    return jsonify({'success': True, 'message': 'Генерация запущена'})
+
+
+@app.route('/api/generate/status', methods=['GET'])
+@require_auth
+def generate_status_view():
+    """Статус фоновой генерации галереи"""
+    return jsonify(generate_status)
 
 
 @app.route('/api/add-category', methods=['POST'])
