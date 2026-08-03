@@ -1,10 +1,10 @@
 {
-    "total_photos": 12,
-    "total_size_mb": 175.31,
+    "total_photos": 10,
+    "total_size_mb": 173.88,
     "date_range": {
-        "oldest": "2016-08-10",
+        "oldest": "2026-01-31",
         "newest": "2026-03-30",
-        "years_active": 10
+        "years_active": 0
     },
     "cameras": {
     "Pixel 10": 1
@@ -13,12 +13,10 @@
     "Pixel 10 back camera 4.53mm f/1.7": 1
 },
     "timeline": {
-    "2016-08": 1,
-    "2026-03": 10,
-    "2026-01": 1
+    "2026-01": 1,
+    "2026-03": 9
 },
     "categories": {
-    "other": 2,
     "portrait": 2,
     "wildlife": 8
 },
