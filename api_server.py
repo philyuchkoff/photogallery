@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import secrets
 import logging
+import time
+import threading
 from pathlib import Path
 from functools import wraps
 from werkzeug.utils import secure_filename
@@ -51,14 +53,25 @@ if not ADMIN_PASSWORD:
     print("   export PHOTOGALLERY_ADMIN_PASSWORD='your_secure_password'")
     print("")
 
-# Хранилище сессий (простое, для демо)
+# Хранилище сессий (в памяти, с TTL)
+SESSION_TTL = 60 * 60 * 24  # 24 часа
 sessions = {}
+
+
+def clean_sessions():
+    """Удаляет просроченные сессии и сортирует словарь по времени истечения."""
+    now = time.time()
+    expired = [t for t, exp in sessions.items() if exp < now]
+    for t in expired:
+        del sessions[t]
+
 
 def require_auth(f):
     """Декоратор для проверки авторизации"""
     @wraps(f)
     def decorated(*args, **kwargs):
         token = request.headers.get('X-Auth-Token')
+        clean_sessions()
         if not token or token not in sessions:
             return jsonify({'success': False, 'error': 'Unauthorized'}), 401
         return f(*args, **kwargs)
@@ -103,7 +116,7 @@ def login():
     
     if password == ADMIN_PASSWORD:
         token = secrets.token_urlsafe(32)
-        sessions[token] = True
+        sessions[token] = time.time() + SESSION_TTL
         return jsonify({'success': True, 'token': token})
     else:
         return jsonify({'success': False, 'error': 'Invalid password'}), 401
