@@ -15,7 +15,15 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__, static_folder='Web')
-CORS(app)
+
+# CORS включается только для явно разрешённых origin (через PHOTOGALLERY_ALLOWED_ORIGINS,
+# список через запятую). По умолчанию отключён, т.к. клиент работает с того же origin.
+_cors_origins = [
+    o.strip() for o in os.environ.get('PHOTOGALLERY_ALLOWED_ORIGINS', '').split(',')
+    if o.strip()
+]
+if _cors_origins:
+    CORS(app, origins=_cors_origins)
 
 BASE_DIR = Path(__file__).parent
 SOURCE_DIR = BASE_DIR / 'Source'
