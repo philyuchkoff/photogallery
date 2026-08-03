@@ -11,6 +11,7 @@ import subprocess
 import secrets
 from pathlib import Path
 from functools import wraps
+from werkzeug.utils import secure_filename
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
@@ -180,12 +181,15 @@ def upload_photos():
     uploaded = []
     for file in files:
         if file.filename:
-            # Сохраняем оригинальное имя
-            filepath = category_dir / file.filename
+            # secure_filename удаляет пути (../) и спецсимволы, оставляя безопасное имя
+            safe_name = secure_filename(file.filename)
+            if not safe_name:
+                continue
+            filepath = category_dir / safe_name
             # Если файл существует, добавляем суффикс
             counter = 1
             while filepath.exists():
-                name, ext = os.path.splitext(file.filename)
+                name, ext = os.path.splitext(safe_name)
                 filepath = category_dir / f"{name}_{counter}{ext}"
                 counter += 1
             file.save(filepath)
@@ -203,8 +207,11 @@ def delete_photos():
     
     deleted = []
     for photo_path in photos:
-        filepath = SOURCE_DIR / photo_path
-        if filepath.exists():
+        filepath = (SOURCE_DIR / photo_path).resolve()
+        # Защита от path traversal: удалять можно только файлы внутри Source/
+        if not filepath.is_relative_to(SOURCE_DIR.resolve()):
+            continue
+        if filepath.is_file():
             filepath.unlink()
             deleted.append(photo_path)
             
