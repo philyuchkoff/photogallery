@@ -41,6 +41,7 @@ echo "0" > "$temp_total"
 echo "0" > "$temp_size"
 echo "" > "$temp_dir/oldest.txt"
 echo "" > "$temp_dir/newest.txt"
+: > "$temp_dir/photos.tsv"  # создаём пустой файл заранее (CI может работать без фото)
 
 # Функция для добавления в счетчик
 add_to_counter() {
