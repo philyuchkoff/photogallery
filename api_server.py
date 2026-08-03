@@ -132,13 +132,11 @@ def get_categories():
     """Получить список категорий"""
     categories = []
     for cat in CATEGORIES:
-        cat_dir = SOURCE_DIR / cat['key'].capitalize()
-        if cat_dir.exists() or True:  # Показываем все категории
-            categories.append({
-                'key': cat['key'],
-                'name': cat['name'],
-                'icon': cat['icon']
-            })
+        categories.append({
+            'key': cat['key'],
+            'name': cat['name'],
+            'icon': cat['icon']
+        })
     return jsonify(categories)
 
 
