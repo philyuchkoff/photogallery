@@ -10,3 +10,4 @@ docs/plans/todo.md
 **/*.png
 **/.DS_Store__pycache__/
 *.pyc
+.DS_Store
