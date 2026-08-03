@@ -511,32 +511,55 @@ container.innerHTML = currentPhotoList.map(photo => `
                 setTimeout(() => { status.style.display = 'none'; }, 3000);
             }
 
-            // Генерация галереи
-            async function generateGallery() {
+            // Генерация галереи (запуск в фоне + опрос статуса)
+            let generateTimer = null;
+
+            async function pollGenerateStatus() {
+                try {
+                    const response = await fetch('/api/generate/status', {
+                        headers: getAuthHeaders()
+                    });
+                    const status = await response.json();
+                    const el = document.getElementById('generateStatus');
+
+                    if (!status.running) {
+                        if (generateTimer) { clearInterval(generateTimer); generateTimer = null; }
+                        if (status.ok === true) {
+                            el.className = 'status success';
+                            el.textContent = '✅ Галерея сгенерирована';
+                        } else if (status.ok === false) {
+                            el.className = 'status error';
+                            el.textContent = `❌ Ошибка: ${status.error || 'неизвестная'}`;
+                        }
+                        setTimeout(() => { el.style.display = 'none'; }, 5000);
+                    }
+                } catch (e) {
+                    if (generateTimer) { clearInterval(generateTimer); generateTimer = null; }
+                }
+            }
+
+            function generateGallery() {
                 const status = document.getElementById('generateStatus');
                 status.className = 'status loading';
                 status.textContent = '🔄 Генерация галереи...';
                 status.style.display = 'block';
 
-                try {
-                    const response = await fetch('/api/generate', {
-                        method: 'POST',
-                        headers: getAuthHeaders()
-                    });
-                    const result = await response.json();
-
+                fetch('/api/generate', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                }).then(resp => resp.json()).then(result => {
                     if (result.success) {
-                        status.className = 'status success';
-                        status.textContent = `✅ ${result.message}`;
+                        generateTimer = setInterval(pollGenerateStatus, 2000);
                     } else {
-                        throw new Error(result.error);
+                        status.className = 'status error';
+                        status.textContent = `❌ ${result.error}`;
+                        setTimeout(() => { status.style.display = 'none'; }, 3000);
                     }
-                } catch (error) {
+                }).catch(error => {
                     status.className = 'status error';
                     status.textContent = `❌ Ошибка: ${error.message}`;
-                }
-
-                setTimeout(() => { status.style.display = 'none'; }, 3000);
+                    setTimeout(() => { status.style.display = 'none'; }, 3000);
+                });
             }
 
             // Загрузка фото
