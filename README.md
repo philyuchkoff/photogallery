@@ -277,7 +277,11 @@ QUALITY="85"          # JPG quality (1-100)
 
 ## Deployment
 ### GitHub Pages (CI)
-A GitHub Actions workflow (`.github/workflows/build-deploy.yml`) builds the gallery and publishes the `Web/` folder to GitHub Pages automatically on every push to `main`.
+A GitHub Actions workflow (`.github/workflows/build-deploy.yml`) builds the gallery and validates JSON on every push to `main`.
+
+To publish on GitHub Pages:
+1. Settings → Pages → Build and deployment → Source: **GitHub Actions**
+2. Add the `deploy` job to the workflow (configure-pages → upload-pages-artifact → deploy-pages); see comments in the workflow file.
 
 ### Manual
 ```bash

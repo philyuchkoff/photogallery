@@ -1,4 +1,4 @@
-name: Build & Deploy
+name: Build
 
 on:
   push:
@@ -7,11 +7,9 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: build
   cancel-in-progress: true
 
 jobs:
@@ -20,11 +18,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install ImageMagick
-        run: sudo apt-get update && sudo apt-get install -y imagemagick
-
-      - name: Install exiftool
-        run: sudo apt-get install -y libimage-exiftool-perl
+      - name: Install ImageMagick and exiftool
+        run: sudo apt-get update && sudo apt-get install -y imagemagick libimage-exiftool-perl
 
       - name: Build gallery
         run: ./build_gallery.sh ./Source ./Web
@@ -34,20 +29,13 @@ jobs:
           python3 -m json.tool Web/gallery.json > /dev/null
           python3 -m json.tool Web/stats.json > /dev/null
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload Web artifact
+        uses: actions/upload-artifact@v4
         with:
+          name: web
           path: Web
+          retention-days: 14
 
-  deploy:
-    needs: build
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+# Деплой на GitHub Pages включается так:
+# 1. Settings → Pages → Build and deployment → Source: GitHub Actions
+# 2. Добавить job deploy с actions/configure-pages@v5 → upload-pages-artifact@v3 → actions/deploy-pages@v4
