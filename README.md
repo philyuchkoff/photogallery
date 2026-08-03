@@ -50,16 +50,18 @@ photogallery/
 ├── Web/                         # Generated website (auto-created)
 │   ├── index.html               # Gallery viewer
 │   ├── stats.html               # Statistics dashboard
+│   ├── godmode.html             # Admin panel
+│   ├── categories.js            # Categories for the frontend (generated)
 │   ├── gallery.json             # Photo metadata
 │   ├── stats.json               # Statistics data
 │   ├── full/                    # Optimized full-size images
 │   └── thumb/                   # Thumbnails (400px)
-│   ├── godmode.html             # Admin panel
 │
+├── categories.json              # Single source of truth for categories
 ├── build_gallery.sh             # Main gallery generator
 ├── api_server.py                # Admin API server
 ├── start_server.sh              # Launch script with env vars
-├── .env                         # Environment variables (optional)
+├── .env.example                 # Environment template (copy to .env)
 └── scripts/                     # Helper utilities
     ├── add_category.sh          # Add new category
     ├── add_rating.sh            # Add rating to photos
@@ -146,7 +148,11 @@ python3 api_server.py
 
 ### Environment Variables
 
-`PHOTOGALLERY_ADMIN_PASSWORD`	- default	`admin123` (⚠️ change for production!)
+| Variable | Description | Default |
+|---|---|---|
+| `PHOTOGALLERY_ADMIN_PASSWORD` | Password for the admin panel (required) | none — a temporary random password is generated |
+| `PHOTOGALLERY_DEBUG` | Enable Werkzeug debug mode (`1`) | not set (debug off) |
+| `PHOTOGALLERY_ALLOWED_ORIGINS` | Comma-separated allowed CORS origins | not set (CORS disabled) |
 
 ### Customizing Admin Password
 ```bash
@@ -180,7 +186,7 @@ Features:
 - generates `gallery.json` and `stats.json`
 
 ### `scripts/add_category.sh`
-Adds a new category with automatic updates to all necessary files.
+Adds a new category: creates the folder and updates the single source of truth `categories.json`.
 
 ```bash
 ./scripts/add_category.sh <category_key> [options]
@@ -248,6 +254,7 @@ Optionally add a rating: `echo "5" > "Source/Category/Subcategory/photo.rating"`
 Regenerate gallery: `./build_gallery.sh Source/ Web/`
 
 ### Adding a New Category
+Categories are stored in a single source of truth — `categories.json`. Use the helper script:
 ```bash
 # Simple
 ./scripts/add_category.sh Marine --icon "🌊" --name "Marine Life"
@@ -255,6 +262,7 @@ Regenerate gallery: `./build_gallery.sh Source/ Web/`
 # With custom pattern
 ./scripts/add_category.sh Night --icon "🌙" --name "Night Photography" --pattern "Night,night,nocturnal"
 ```
+The script creates the folder, updates `categories.json`, and rebuilds the gallery (the frontend reads categories from the generated `Web/categories.js`).
 
 ### Modifying Themes
 Themes are controlled via CSS variables in `index.html`. Dark theme is default, light theme toggles with `body.light` class.
@@ -268,7 +276,10 @@ QUALITY="85"          # JPG quality (1-100)
 ```
 
 ## Deployment
-### GitHub Pages
+### GitHub Pages (CI)
+A GitHub Actions workflow (`.github/workflows/build-deploy.yml`) builds the gallery and publishes the `Web/` folder to GitHub Pages automatically on every push to `main`.
+
+### Manual
 ```bash
 # Generate gallery
 ./build_gallery.sh Source/ Web/

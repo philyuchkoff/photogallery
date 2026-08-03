@@ -9,13 +9,33 @@ import json
 import shutil
 import subprocess
 import secrets
+import logging
+import time
+import threading
 from pathlib import Path
 from functools import wraps
+from werkzeug.utils import secure_filename
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
+import threading
+
 app = Flask(__name__, static_folder='Web')
-CORS(app)
+
+# Статус текущей генерации галереи
+generate_status = {'running': False, 'ok': None, 'error': None}
+
+# CORS включается только для явно разрешённых origin (через PHOTOGALLERY_ALLOWED_ORIGINS,
+# список через запятую). По умолчанию отключён, т.к. клиент работает с того же origin.
+_cors_origins = [
+    o.strip() for o in os.environ.get('PHOTOGALLERY_ALLOWED_ORIGINS', '').split(',')
+    if o.strip()
+]
+if _cors_origins:
+    CORS(app, origins=_cors_origins)
 
 BASE_DIR = Path(__file__).parent
 SOURCE_DIR = BASE_DIR / 'Source'
@@ -23,49 +43,69 @@ WEB_DIR = BASE_DIR / 'Web'
 BUILD_SCRIPT = BASE_DIR / 'build_gallery.sh'
 
 # Получаем пароль из переменной окружения
-ADMIN_PASSWORD = os.environ.get('PHOTOGALLERY_ADMIN_PASSWORD', 'admin123')
-if ADMIN_PASSWORD == 'admin123':
-    print("⚠️  WARNING: Using default password 'admin123'")
-    print("   Set PHOTOGALLERY_ADMIN_PASSWORD environment variable for security:")
+ADMIN_PASSWORD = os.environ.get('PHOTOGALLERY_ADMIN_PASSWORD')
+if not ADMIN_PASSWORD:
+    ADMIN_PASSWORD = secrets.token_urlsafe(24)
+    print("⚠️  WARNING: PHOTOGALLERY_ADMIN_PASSWORD not set!")
+    print("   Generated a temporary random password (valid until server restart):")
+    print(f"   {ADMIN_PASSWORD}")
+    print("   Set the environment variable for a permanent password:")
     print("   export PHOTOGALLERY_ADMIN_PASSWORD='your_secure_password'")
     print("")
 
-# Хранилище сессий (простое, для демо)
+# Хранилище сессий (в памяти, с TTL)
+SESSION_TTL = 60 * 60 * 24  # 24 часа
 sessions = {}
+
+
+def clean_sessions():
+    """Удаляет просроченные сессии и сортирует словарь по времени истечения."""
+    now = time.time()
+    expired = [t for t, exp in sessions.items() if exp < now]
+    for t in expired:
+        del sessions[t]
+
 
 def require_auth(f):
     """Декоратор для проверки авторизации"""
     @wraps(f)
     def decorated(*args, **kwargs):
         token = request.headers.get('X-Auth-Token')
+        clean_sessions()
         if not token or token not in sessions:
             return jsonify({'success': False, 'error': 'Unauthorized'}), 401
         return f(*args, **kwargs)
     return decorated
 
-# Категории по умолчанию
-CATEGORIES = [
-    {'key': 'wildlife', 'name': 'Дикая природа', 'icon': '🦊'},
-    {'key': 'portrait', 'name': 'Портреты', 'icon': '👤'},
-    {'key': 'landscape', 'name': 'Пейзажи', 'icon': '🌄'},
-    {'key': 'portfolio', 'name': 'Портфолио', 'icon': '⭐'},
-    {'key': 'street', 'name': 'Уличная', 'icon': '🚶'},
-    {'key': 'other', 'name': 'Другое', 'icon': '📁'}
+# Категории по умолчанию (используются при создании categories.json)
+DEFAULT_CATEGORIES = [
+    {'key': 'portfolio', 'name': 'Портфолио', 'icon': '⭐', 'patterns': 'Portfolio,portfolio'},
+    {'key': 'wildlife', 'name': 'Дикая природа', 'icon': '🦊', 'patterns': 'Wildlife,wildlife,WILDLIFE'},
+    {'key': 'landscape', 'name': 'Пейзажи', 'icon': '🌄', 'patterns': 'Landscape,landscape'},
+    {'key': 'portrait', 'name': 'Портреты', 'icon': '👤', 'patterns': 'Portrait,portrait,PORTRAIT'},
+    {'key': 'street', 'name': 'Уличная', 'icon': '🚶', 'patterns': 'Street,street'},
+    {'key': 'other', 'name': 'Другое', 'icon': '📁', 'patterns': ''}
 ]
 
-# Загрузка пользовательских категорий
+# Единый источник категорий — categories.json
 CATEGORIES_FILE = BASE_DIR / 'categories.json'
-if CATEGORIES_FILE.exists():
+
+
+def load_categories():
+    """Загружает категории из categories.json (создаёт файл с дефолтами при отсутствии)."""
+    if not CATEGORIES_FILE.exists():
+        with open(CATEGORIES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(DEFAULT_CATEGORIES, f, ensure_ascii=False, indent=2)
     try:
-        with open(CATEGORIES_FILE) as f:
-            user_categories = json.load(f)
-            # Объединяем, избегая дубликатов
-            existing_keys = {c['key'] for c in CATEGORIES}
-            for cat in user_categories:
-                if cat['key'] not in existing_keys:
-                    CATEGORIES.append(cat)
-    except:
-        pass
+        with open(CATEGORIES_FILE, encoding='utf-8') as f:
+            data = json.load(f)
+        return [c for c in data if isinstance(c, dict) and c.get('key')]
+    except (json.JSONDecodeError, OSError) as e:
+        log.error('Не удалось прочитать categories.json: %s', e)
+        return list(DEFAULT_CATEGORIES)
+
+
+CATEGORIES = load_categories()
 
 
 @app.route('/api/login', methods=['POST'])
@@ -76,7 +116,7 @@ def login():
     
     if password == ADMIN_PASSWORD:
         token = secrets.token_urlsafe(32)
-        sessions[token] = True
+        sessions[token] = time.time() + SESSION_TTL
         return jsonify({'success': True, 'token': token})
     else:
         return jsonify({'success': False, 'error': 'Invalid password'}), 401
@@ -110,13 +150,11 @@ def get_categories():
     """Получить список категорий"""
     categories = []
     for cat in CATEGORIES:
-        cat_dir = SOURCE_DIR / cat['key'].capitalize()
-        if cat_dir.exists() or True:  # Показываем все категории
-            categories.append({
-                'key': cat['key'],
-                'name': cat['name'],
-                'icon': cat['icon']
-            })
+        categories.append({
+            'key': cat['key'],
+            'name': cat['name'],
+            'icon': cat['icon']
+        })
     return jsonify(categories)
 
 
@@ -169,12 +207,15 @@ def upload_photos():
     uploaded = []
     for file in files:
         if file.filename:
-            # Сохраняем оригинальное имя
-            filepath = category_dir / file.filename
+            # secure_filename удаляет пути (../) и спецсимволы, оставляя безопасное имя
+            safe_name = secure_filename(file.filename)
+            if not safe_name:
+                continue
+            filepath = category_dir / safe_name
             # Если файл существует, добавляем суффикс
             counter = 1
             while filepath.exists():
-                name, ext = os.path.splitext(file.filename)
+                name, ext = os.path.splitext(safe_name)
                 filepath = category_dir / f"{name}_{counter}{ext}"
                 counter += 1
             file.save(filepath)
@@ -192,16 +233,19 @@ def delete_photos():
     
     deleted = []
     for photo_path in photos:
-        filepath = SOURCE_DIR / photo_path
-        if filepath.exists():
+        filepath = (SOURCE_DIR / photo_path).resolve()
+        # Защита от path traversal: удалять можно только файлы внутри Source/
+        if not filepath.is_relative_to(SOURCE_DIR.resolve()):
+            continue
+        if filepath.is_file():
             filepath.unlink()
             deleted.append(photo_path)
             
-            # Удаляем миниатюру если есть
-            thumb_name = filepath.stem + '.jpg'
-            thumb_path = WEB_DIR / 'thumb' / thumb_name
-            if thumb_path.exists():
-                thumb_path.unlink()
+            # Удаляем миниатюру и full-версию если есть
+            for sub_dir in ('thumb', 'full'):
+                cached = WEB_DIR / sub_dir / (filepath.stem + '.jpg')
+                if cached.exists():
+                    cached.unlink()
     
     return jsonify({'success': True, 'deleted': len(deleted)})
 
@@ -209,21 +253,40 @@ def delete_photos():
 @app.route('/api/generate', methods=['POST'])
 @require_auth
 def generate_gallery():
-    """Запустить build_gallery.sh"""
-    try:
-        result = subprocess.run(
-            [str(BUILD_SCRIPT), str(SOURCE_DIR), str(WEB_DIR)],
-            capture_output=True,
-            text=True,
-            timeout=120
-        )
-        
-        if result.returncode == 0:
-            return jsonify({'success': True, 'message': 'Галерея сгенерирована'})
-        else:
-            return jsonify({'success': False, 'error': result.stderr})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    """Запустить build_gallery.sh в фоне"""
+    if generate_status['running']:
+        return jsonify({'success': False, 'error': 'Генерация уже запущена'}), 409
+
+    def run_build():
+        generate_status['running'] = True
+        generate_status['ok'] = None
+        generate_status['error'] = None
+        try:
+            result = subprocess.run(
+                [str(BUILD_SCRIPT), str(SOURCE_DIR), str(WEB_DIR)],
+                capture_output=True,
+                text=True,
+                timeout=600
+            )
+            generate_status['ok'] = (result.returncode == 0)
+            generate_status['error'] = result.stderr if result.returncode != 0 else None
+        except Exception as e:
+            generate_status['ok'] = False
+            generate_status['error'] = str(e)
+            log.error('Ошибка генерации галереи: %s', e)
+        finally:
+            generate_status['running'] = False
+
+    thread = threading.Thread(target=run_build, daemon=True)
+    thread.start()
+    return jsonify({'success': True, 'message': 'Генерация запущена'})
+
+
+@app.route('/api/generate/status', methods=['GET'])
+@require_auth
+def generate_status_view():
+    """Статус фоновой генерации галереи"""
+    return jsonify(generate_status)
 
 
 @app.route('/api/add-category', methods=['POST'])
@@ -237,23 +300,31 @@ def add_category():
     
     if not key or not name:
         return jsonify({'success': False, 'error': 'Key and name required'}), 400
-    
+
+    key_clean = key.lower().strip()
+    if not key_clean:
+        return jsonify({'success': False, 'error': 'Key and name required'}), 400
+
     # Проверяем, нет ли уже такой категории
-    if any(c['key'] == key for c in CATEGORIES):
-        return jsonify({'success': False, 'error': f'Category "{key}" already exists'}), 400
+    if any(c['key'] == key_clean for c in CATEGORIES):
+        return jsonify({'success': False, 'error': f'Category "{key_clean}" already exists'}), 400
     
     # Создаем папку
-    category_dir = SOURCE_DIR / key.capitalize()
+    category_dir = SOURCE_DIR / key_clean.capitalize()
     category_dir.mkdir(exist_ok=True)
     
-    # Сохраняем категорию
-    new_category = {'key': key, 'name': name, 'icon': icon}
+    # Сохраняем категорию (с паттернами по умолчанию)
+    new_category = {
+        'key': key_clean,
+        'name': name.strip(),
+        'icon': icon,
+        'patterns': f"{key_clean.capitalize()},{key_clean}"
+    }
     CATEGORIES.append(new_category)
     
-    # Сохраняем в файл
-    with open(CATEGORIES_FILE, 'w') as f:
-        json.dump([c for c in CATEGORIES if c['key'] not in ['wildlife', 'portrait', 'landscape', 'portfolio', 'street', 'other']], 
-                  f, ensure_ascii=False, indent=2)
+    # Сохраняем в файл (полный список — categories.json единый источник)
+    with open(CATEGORIES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(CATEGORIES, f, ensure_ascii=False, indent=2)
     
     return jsonify({'success': True, 'category': new_category})
 
@@ -275,12 +346,12 @@ if __name__ == '__main__':
     print("")
     print("🔐 Authentication:")
     print(f"   Password from: PHOTOGALLERY_ADMIN_PASSWORD env var")
-    if ADMIN_PASSWORD == 'admin123':
-        print("   ⚠️  Using DEFAULT password: admin123")
-        print("   Set environment variable for security:")
+    if not os.environ.get('PHOTOGALLERY_ADMIN_PASSWORD'):
+        print("   ⚠️  NO password set! Using a temporary random password")
+        print("   Set PHOTOGALLERY_ADMIN_PASSWORD for a permanent password:")
         print("   export PHOTOGALLERY_ADMIN_PASSWORD='your_secure_password'")
     else:
         print("   ✅ Custom password loaded from environment")
     print("=" * 50)
     print("")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=os.environ.get('PHOTOGALLERY_DEBUG') == '1')

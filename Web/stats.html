@@ -281,6 +281,7 @@
             </div>
         </div>
 
+        <script src="categories.js"></script>
         <script>
             let statsData = null;
             let charts = {};
@@ -530,9 +531,10 @@
                     });
                 }
 
-                // Категории
+                // Категории (единый источник — categories.js)
                 const categories = statsData.categories || {};
-                const categoryNames = {
+                const categoryNames = {};
+                const defaultCategoryNames = {
                     'portfolio': 'Портфолио',
                     'wildlife': 'Дикая природа',
                     'landscape': 'Пейзажи',
@@ -540,6 +542,8 @@
                     'street': 'Уличная',
                     'other': 'Другое'
                 };
+                (window.PHOTOGALLERY_CATEGORIES || []).forEach(c => { categoryNames[c.id] = c.name; });
+                Object.keys(defaultCategoryNames).forEach(k => { categoryNames[k] = categoryNames[k] || defaultCategoryNames[k]; });
                 const categoriesCtx = document.getElementById('categories-chart')?.getContext('2d');
                 if (categoriesCtx && Object.keys(categories).length > 0) {
                     charts.categories = new Chart(categoriesCtx, {

@@ -405,6 +405,14 @@
                 };
             }
 
+            // Экранирование HTML для защиты от XSS (имена файлов/категорий управляются пользователем)
+            function escapeHtml(s) {
+                if (s == null) return '';
+                return String(s).replace(/[&<>"']/g, m => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                }[m]));
+            }
+
             // Загрузка категорий
             async function loadCategories() {
                 try {
@@ -415,7 +423,7 @@
                     const select = document.getElementById('categorySelect');
                     select.innerHTML = '<option value="">Выберите категорию...</option>';
                     categories.forEach(cat => {
-                        select.innerHTML += `<option value="${cat.key}">${cat.icon} ${cat.name}</option>`;
+                        select.innerHTML += `<option value="${escapeHtml(cat.key)}">${escapeHtml(cat.icon)} ${escapeHtml(cat.name)}</option>`;
                     });
                 } catch (error) {
                     console.error('Error loading categories:', error);
@@ -443,12 +451,12 @@
                     container.innerHTML = '<div style="text-align:center; padding:2rem;">Нет фото</div>';
                     return;
                 }
-                container.innerHTML = currentPhotoList.map(photo => `
-                <div class="photo-item ${selectedPhotos.has(photo.path) ? 'selected' : ''}" onclick="toggleSelect('${photo.path.replace(/'/g, "\\'")}')">
-                    <img src="${photo.thumbnail}" alt="${photo.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23888\' stroke-width=\'2\'%3E%3Crect x=\'2\' y=\'2\' width=\'20\' height=\'20\'/%3E%3C/svg%3E'">
+container.innerHTML = currentPhotoList.map(photo => `
+                <div class="photo-item ${selectedPhotos.has(photo.path) ? 'selected' : ''}" onclick="toggleSelect('${escapeHtml(photo.path)}')">
+                    <img src="${escapeHtml(photo.thumbnail)}" alt="${escapeHtml(photo.name)}">
                     <div class="info">
-                        <div class="file-name">${photo.name}</div>
-                        <div class="file-size">${photo.category}${photo.subcategory ? '/' + photo.subcategory : ''}</div>
+                        <div class="file-name">${escapeHtml(photo.name)}</div>
+                        <div class="file-size">${escapeHtml(photo.category)}${photo.subcategory ? '/' + escapeHtml(photo.subcategory) : ''}</div>
                     </div>
                     <div class="checkbox"></div>
                 </div>
@@ -503,32 +511,55 @@
                 setTimeout(() => { status.style.display = 'none'; }, 3000);
             }
 
-            // Генерация галереи
-            async function generateGallery() {
+            // Генерация галереи (запуск в фоне + опрос статуса)
+            let generateTimer = null;
+
+            async function pollGenerateStatus() {
+                try {
+                    const response = await fetch('/api/generate/status', {
+                        headers: getAuthHeaders()
+                    });
+                    const status = await response.json();
+                    const el = document.getElementById('generateStatus');
+
+                    if (!status.running) {
+                        if (generateTimer) { clearInterval(generateTimer); generateTimer = null; }
+                        if (status.ok === true) {
+                            el.className = 'status success';
+                            el.textContent = '✅ Галерея сгенерирована';
+                        } else if (status.ok === false) {
+                            el.className = 'status error';
+                            el.textContent = `❌ Ошибка: ${status.error || 'неизвестная'}`;
+                        }
+                        setTimeout(() => { el.style.display = 'none'; }, 5000);
+                    }
+                } catch (e) {
+                    if (generateTimer) { clearInterval(generateTimer); generateTimer = null; }
+                }
+            }
+
+            function generateGallery() {
                 const status = document.getElementById('generateStatus');
                 status.className = 'status loading';
                 status.textContent = '🔄 Генерация галереи...';
                 status.style.display = 'block';
 
-                try {
-                    const response = await fetch('/api/generate', {
-                        method: 'POST',
-                        headers: getAuthHeaders()
-                    });
-                    const result = await response.json();
-
+                fetch('/api/generate', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                }).then(resp => resp.json()).then(result => {
                     if (result.success) {
-                        status.className = 'status success';
-                        status.textContent = `✅ ${result.message}`;
+                        generateTimer = setInterval(pollGenerateStatus, 2000);
                     } else {
-                        throw new Error(result.error);
+                        status.className = 'status error';
+                        status.textContent = `❌ ${result.error}`;
+                        setTimeout(() => { status.style.display = 'none'; }, 3000);
                     }
-                } catch (error) {
+                }).catch(error => {
                     status.className = 'status error';
                     status.textContent = `❌ Ошибка: ${error.message}`;
-                }
-
-                setTimeout(() => { status.style.display = 'none'; }, 3000);
+                    setTimeout(() => { status.style.display = 'none'; }, 3000);
+                });
             }
 
             // Загрузка фото

@@ -13,6 +13,10 @@ SOURCE_DIR="${SOURCE_DIR%/}"
 
 mkdir -p "$WEB_DIR/full" "$WEB_DIR/thumb"
 
+# Очистка осиротевших файлов: удаляем старые full/thumb, чтобы не скапливались
+# файлы от удалённых из Source оригиналов
+rm -f "$WEB_DIR"/full/* "$WEB_DIR"/thumb/* 2>/dev/null || true
+
 # Проверка ImageMagick
 if ! command -v convert &> /dev/null; then
     echo "Error: ImageMagick not installed. Run: brew install imagemagick"
@@ -84,12 +88,44 @@ normalize_date() {
     echo "$date_str" | sed 's/:/-/g'
 }
 
-# Начинаем JSON массив
-echo "[" > "$WEB_DIR/gallery.json"
-first=true
+# Единый источник категорий — categories.json (рядом со скриптом)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CATEGORY_MAP_FILE="$temp_dir/categories_map.txt"
 
-# Список известных категорий (чтобы не путать с подкатегориями)
-KNOWN_CATEGORIES="Portfolio|Wildlife|Landscape|Portrait|Street"
+if [ -f "$SCRIPT_DIR/categories.json" ]; then
+    python3 - "$SCRIPT_DIR/categories.json" "$CATEGORY_MAP_FILE" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding='utf-8') as f:
+    cats = json.load(f)
+
+lines = []
+known = []
+seen = set()
+for cat in cats:
+    patterns = [cat['key']]
+    raw = cat.get('patterns', '') or ''
+    patterns += [p.strip() for p in raw.split(',') if p.strip()]
+    lines.append(f"{cat['key']}|{'|'.join(patterns)}")
+    # Паттерны с заглавной буквы — имена реальных папок категорий (для определения подкатегории)
+    for p in patterns:
+        if p[:1].isupper() and p not in seen:
+            seen.add(p)
+            known.append(p)
+
+with open(sys.argv[2], 'w', encoding='utf-8') as f:
+    f.write('\n'.join(lines) + '\n')
+    f.write('_KNOWN_:' + '|'.join(known) + '\n')
+PY
+else
+    printf 'portfolio|Portfolio\nwildlife|Wildlife\nlandscape|Landscape\nportrait|Portrait\nstreet|Street\n' > "$CATEGORY_MAP_FILE"
+    echo "_KNOWN_:Portfolio|Wildlife|Landscape|Portrait|Street" >> "$CATEGORY_MAP_FILE"
+fi
+
+# KNOWN_CATEGORIES: паттерны с заглавной буквы (имена папок категорий)
+KNOWN_CATEGORIES=$(grep '^_KNOWN_:' "$CATEGORY_MAP_FILE" | cut -d: -f2-)
+grep -v '^_KNOWN_:' "$CATEGORY_MAP_FILE" > "$temp_dir/categories_map.tmp" && mv "$temp_dir/categories_map.tmp" "$CATEGORY_MAP_FILE"
 
 # Поиск всех изображений
 find "$SOURCE_DIR" -type f \( \
@@ -188,19 +224,18 @@ find "$SOURCE_DIR" -type f \( \
         fi
     fi
     
-    # Определение категории
     category="other"
-    if [[ "$rel_path" == *"Portfolio"* ]] || [[ "$rel_path" == *"portfolio"* ]]; then
-        category="portfolio"
-    elif [[ "$rel_path" == *"Wildlife"* ]] || [[ "$rel_path" == *"wildlife"* ]]; then
-        category="wildlife"
-    elif [[ "$rel_path" == *"Landscape"* ]] || [[ "$rel_path" == *"landscape"* ]]; then
-        category="landscape"
-    elif [[ "$rel_path" == *"Portrait"* ]] || [[ "$rel_path" == *"portrait"* ]] || [[ "$rel_path" == *"PORTRAIT"* ]]; then
-        category="portrait"
-    elif [[ "$rel_path" == *"Street"* ]] || [[ "$rel_path" == *"street"* ]]; then
-        category="street"
-    fi
+    rel_lower=$(echo "$rel_path" | tr '[:upper:]' '[:lower:]')
+    while IFS='|' read -r cat_key cat_pats; do
+        IFS='|' read -ra pat_list <<< "$cat_pats"
+        for p in "${pat_list[@]}"; do
+            p_lower=$(echo "$p" | tr '[:upper:]' '[:lower:]')
+            if [ -n "$p_lower" ] && [[ "$rel_lower" == *"$p_lower"* ]]; then
+                category="$cat_key"
+                break 2
+            fi
+        done
+    done < "$CATEGORY_MAP_FILE"
     add_to_counter "$category_file" "$category"
     
     # Чтение рейтинга
@@ -261,47 +296,48 @@ find "$SOURCE_DIR" -type f \( \
     convert "$photo" -resize "${FULL_SIZE}x${FULL_SIZE}" -quality "$QUALITY" \
         "$WEB_DIR/full/${name_without_ext}.jpg" 2>/dev/null || true
     
-    # Добавляем запись в JSON
-    if [ "$first" = true ]; then
-        first=false
-    else
-        echo "," >> "$WEB_DIR/gallery.json"
-    fi
-    
-    # Экранируем спецсимволы
-    title_escaped=$(echo "$name_without_ext" | sed 's/"/\\"/g' | sed 's/&/\\&/g')
-    location_escaped=$(echo "$location" | sed 's/"/\\"/g')
-    camera_escaped=$(echo "$camera" | sed 's/"/\\"/g')
-    lens_escaped=$(echo "$lens" | sed 's/"/\\"/g')
-    
-    cat >> "$WEB_DIR/gallery.json" <<EOF
-    {
-        "id": "$name_without_ext",
-        "title": "$title_escaped",
-        "full": "full/${name_without_ext}.jpg",
-        "thumbnail": "thumb/${name_without_ext}.jpg",
-        "date": "$date_taken",
-        "camera": "$camera_escaped",
-        "lens": "$lens_escaped",
-        "focal_length": "$focal_length",
-        "aperture": "$aperture",
-        "iso": "$iso",
-        "exposure": "$exposure",
-        "location": "$location_escaped",
-        "category": "$category",
-        "rating": $rating,
-        "size_bytes": $file_size
-    }
-EOF
+    # Сохраняем метаданные в TSV для последующей генерации JSON через python
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$name_without_ext" "$date_taken" "$camera" "$lens" \
+        "$focal_length" "$aperture" "$iso" "$exposure" \
+        "$location" "$category" "$rating" "$file_size" >> "$temp_dir/photos.tsv"
     
     current_total=$(cat "$temp_total")
     echo $((current_total + 1)) > "$temp_total"
     
 done
 
-# Закрываем JSON массив
-echo "" >> "$WEB_DIR/gallery.json"
-echo "]" >> "$WEB_DIR/gallery.json"
+# Генерация gallery.json через python (корректное экранирование и структура JSON)
+python3 - "$temp_dir/photos.tsv" > "$WEB_DIR/gallery.json" <<'PY'
+import json
+import sys
+
+rows = []
+for line in open(sys.argv[1], encoding='utf-8'):
+    parts = line.rstrip('\n').split('\t')
+    if len(parts) != 12:
+        continue
+    name, date, camera, lens, focal, aperture, iso, exposure, location, category, rating, size = parts
+    rows.append({
+        'id': name,
+        'title': name,
+        'full': f'full/{name}.jpg',
+        'thumbnail': f'thumb/{name}.jpg',
+        'date': date,
+        'camera': camera,
+        'lens': lens,
+        'focal_length': focal,
+        'aperture': aperture,
+        'iso': iso,
+        'exposure': exposure,
+        'location': location,
+        'category': category,
+        'rating': int(rating or 0),
+        'size_bytes': int(size or 0)
+    })
+
+print(json.dumps(rows, ensure_ascii=False, indent=4))
+PY
 
 # Чтение итоговой статистики
 total=$(cat "$temp_total" 2>/dev/null || echo "0")
@@ -318,7 +354,8 @@ if [ -n "$oldest_date" ] && [ -n "$newest_date" ] && [ "$oldest_date" != "0000-0
 fi
 
 # Генерация stats.json
-total_size_mb=$(echo "scale=2; $total_size / 1048576" | bc 2>/dev/null || echo "0")
+# (размер в МБ считаем через awk, чтобы не зависеть от bc)
+total_size_mb=$(awk "BEGIN { printf \"%.2f\", $total_size / 1048576 }" 2>/dev/null || echo "0")
 
 cat > "$WEB_DIR/stats.json" <<EOF
 {
@@ -336,6 +373,20 @@ cat > "$WEB_DIR/stats.json" <<EOF
     "ratings": $(counter_to_json "$rating_file")
 }
 EOF
+
+# Генерация categories.js для фронтенда (единый источник — categories.json)
+CAT_JSON="$WEB_DIR/categories.js"
+python3 - "$SCRIPT_DIR/categories.json" > "$CAT_JSON" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding='utf-8') as f:
+    cats = json.load(f)
+
+entries = [{'id': c['key'], 'name': c['name'], 'icon': c['icon']} for c in cats]
+print(f"window.PHOTOGALLERY_CATEGORIES = {json.dumps(entries, ensure_ascii=False)};")
+PY
+echo "   - $CAT_JSON"
 
 # Подсчет файлов в папках
 full_count=0

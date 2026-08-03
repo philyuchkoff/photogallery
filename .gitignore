@@ -1,8 +1,13 @@
 *.backup
 README.forme.md
+# Конфиденциальные файлы
+.env
+docs/plans/todo.md
 # Игнорировать все jpg везде
 **/*.jpg
 # НО не игнорировать jpg в assets
 !assets/**/*.jpg
 **/*.png
-**/.DS_Store
+**/.DS_Store__pycache__/
+*.pyc
+.DS_Store

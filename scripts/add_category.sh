@@ -53,10 +53,8 @@ show_help() {
 
 Что делает скрипт:
     1. Создает папку для категории в ./Source
-    2. Обновляет build_gallery.sh с правилом определения категории
-    3. Обновляет index.html и stats.html с отображением категории
-    4. Добавляет категорию в конфигурационный файл (если используется)
-    5. Перегенерирует галерею
+    2. Добавляет категорию в categories.json (единый источник категорий)
+    3. Перегенерирует галерею (categories.js для фронтенда обновляется автоматически)
 
 EOF
 }
@@ -66,18 +64,12 @@ CATEGORY_KEY=""
 ICON="📁"
 DISPLAY_NAME=""
 PATTERN=""
-CONFIG_FILE="./categories.conf"
 BUILD_SCRIPT="./build_gallery.sh"
-INDEX_HTML="./Web/index.html"
-STATS_HTML="./Web/stats.html"
 
 # Определяем путь к скрипту (если запускаем из папки scripts)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -f "$SCRIPT_DIR/../build_gallery.sh" ]; then
     BUILD_SCRIPT="$SCRIPT_DIR/../build_gallery.sh"
-    INDEX_HTML="$SCRIPT_DIR/../Web/index.html"
-    STATS_HTML="$SCRIPT_DIR/../Web/stats.html"
-    CONFIG_FILE="$SCRIPT_DIR/../categories.conf"
 fi
 
 # Парсим позиционные аргументы и опции
@@ -147,92 +139,39 @@ fi
 mkdir -p "$SOURCE_DIR/${CATEGORY_KEY_CAP}"
 log_success "Создана папка: $SOURCE_DIR/${CATEGORY_KEY_CAP}"
 
-# 2. Обновление build_gallery.sh
-log_info "Обновление build_gallery.sh..."
+# 2. Обновление categories.json (единый источник категорий)
+log_info "Обновление categories.json..."
 
-if [ -f "$BUILD_SCRIPT" ]; then
-    # Создаем резервную копию
-    cp "$BUILD_SCRIPT" "${BUILD_SCRIPT}.backup"
-    
-    # Проверяем, существует ли уже такая категория
-    if grep -q "category=\"$CATEGORY_KEY\"" "$BUILD_SCRIPT"; then
-        log_warning "Категория $CATEGORY_KEY уже существует в build_gallery.sh"
-    else
-        # Формируем условие для новой категории
-        NEW_CONDITION="elif [[ \"\$rel_path\" == *\"${CATEGORY_KEY_CAP}\"* ]] || [[ \"\$rel_path\" == *\"${CATEGORY_KEY}\"* ]]; then
-    category=\"$CATEGORY_KEY\""
-        
-        # Вставляем новую категорию перед блоком "other"
-        # Используем perl для совместимости с macOS (sed на macOS работает иначе)
-        perl -i.bak2 -pe "if (/category=\"other\"/) { print \"$NEW_CONDITION\\n\"; }" "$BUILD_SCRIPT"
-        
-        log_success "Обновлен $BUILD_SCRIPT"
-    fi
-else
-    log_warning "Файл $BUILD_SCRIPT не найден"
+CATEGORIES_JSON="$SCRIPT_DIR/../categories.json"
+if [ ! -f "$CATEGORIES_JSON" ]; then
+    log_error "Файл categories.json не найден: $CATEGORIES_JSON"
+    exit 1
 fi
 
-# 3. Обновление index.html
-log_info "Обновление index.html..."
+if ! python3 - "$CATEGORIES_JSON" "$CATEGORY_KEY" "$DISPLAY_NAME" "$ICON" "$PATTERN" <<'PY'
+import json
+import sys
 
-if [ -f "$INDEX_HTML" ]; then
-    cp "$INDEX_HTML" "${INDEX_HTML}.backup"
-    
-    # Проверяем, существует ли уже такая категория
-    if grep -q "'$CATEGORY_KEY':" "$INDEX_HTML"; then
-        log_warning "Категория $CATEGORY_KEY уже существует в index.html"
-    else
-        # Добавляем новую категорию в функцию getCategoryName()
-        # Используем perl для вставки перед строкой с 'other'
-        perl -i.bak2 -pe "if (/'other': '📁 Другое'/) { print \"        '$CATEGORY_KEY': '$ICON $DISPLAY_NAME',\\n\"; }" "$INDEX_HTML"
-        
-        log_success "Обновлен $INDEX_HTML"
-    fi
+file_path, key, name, icon, pattern = sys.argv[1:5]
+
+with open(file_path, encoding='utf-8') as f:
+    cats = json.load(f)
+
+if any(c.get('key') == key for c in cats):
+    print("EXISTS")
+    sys.exit(0)
+
+cats.append({'key': key, 'name': name, 'icon': icon, 'patterns': pattern})
+
+with open(file_path, 'w', encoding='utf-8') as f:
+    json.dump(cats, f, ensure_ascii=False, indent=2)
+
+print("OK")
+PY
+then
+    log_warning "Ошибка при обновлении categories.json"
 else
-    log_warning "Файл $INDEX_HTML не найден"
-fi
-
-# 4. Обновление stats.html
-log_info "Обновление stats.html..."
-
-if [ -f "$STATS_HTML" ]; then
-    cp "$STATS_HTML" "${STATS_HTML}.backup"
-    
-    # Проверяем, существует ли уже такая категория
-    if grep -q "'$CATEGORY_KEY':" "$STATS_HTML"; then
-        log_warning "Категория $CATEGORY_KEY уже существует в stats.html"
-    else
-        # Добавляем новую категорию в stats.html
-        perl -i.bak2 -pe "if (/'other': 'Другое'/) { print \"                '$CATEGORY_KEY': '$DISPLAY_NAME',\\n\"; }" "$STATS_HTML"
-        
-        log_success "Обновлен $STATS_HTML"
-    fi
-else
-    log_warning "Файл $STATS_HTML не найден"
-fi
-
-# 5. Обновление конфигурационного файла (опционально)
-log_info "Обновление конфигурации..."
-
-if [ -f "$CONFIG_FILE" ]; then
-    # Проверяем, нет ли уже такой категории
-    if ! grep -q "^$CATEGORY_KEY:" "$CONFIG_FILE"; then
-        echo "$CATEGORY_KEY:$DISPLAY_NAME:$ICON:$PATTERN" >> "$CONFIG_FILE"
-        log_success "Добавлена запись в $CONFIG_FILE"
-    else
-        log_warning "Категория $CATEGORY_KEY уже существует в $CONFIG_FILE"
-    fi
-else
-    # Создаем новый конфигурационный файл
-    cat > "$CONFIG_FILE" << EOF
-# Конфигурация категорий фотогалереи
-# Формат: ключ:название:иконка:паттерны_поиска
-portfolio:Портфолио:⭐:Portfolio
-wildlife:Дикая природа:🦊:Wildlife,wildlife
-landscape:Пейзажи:🌄:Landscape,landscape
-$CATEGORY_KEY:$DISPLAY_NAME:$ICON:$PATTERN
-EOF
-    log_success "Создан конфигурационный файл $CONFIG_FILE"
+    log_success "Обновлен $CATEGORIES_JSON"
 fi
 
 # 6. Создание примера README для категории
@@ -280,11 +219,9 @@ log_success "Категория '$DISPLAY_NAME' успешно добавлен�
 echo ""
 echo "📋 Что было сделано:"
 echo "   1. Создана папка: $SOURCE_DIR/${CATEGORY_KEY_CAP}/"
-echo "   2. Обновлен build_gallery.sh (добавлено правило определения категории)"
-echo "   3. Обновлен index.html (добавлена категория в фильтры)"
-echo "   4. Обновлен stats.html (добавлена категория в статистику)"
-echo "   5. Создан README: $README_FILE"
-echo "   6. Галерея перегенерирована"
+echo "   2. Добавлена запись в categories.json (единый источник категорий)"
+echo "   3. Создан README: $README_FILE"
+echo "   4. Галерея перегенерирована (categories.js обновлён автоматически)"
 echo ""
 echo "📁 Структура:"
 echo "   $SOURCE_DIR/${CATEGORY_KEY_CAP}/     # Добавляйте сюда фото"
@@ -302,15 +239,3 @@ echo ""
 echo "   # Перегенерировать галерею после добавления фото"
 echo "   ./build_gallery.sh ./Source ./Web"
 echo "═══════════════════════════════════════════════════════════"
-
-# 9. Восстановление резервных копий (опционально)
-log_info "Резервные копии сохранены:"
-[ -f "${BUILD_SCRIPT}.backup" ] && echo "   - ${BUILD_SCRIPT}.backup"
-[ -f "${INDEX_HTML}.backup" ] && echo "   - ${INDEX_HTML}.backup"
-[ -f "${STATS_HTML}.backup" ] && echo "   - ${STATS_HTML}.backup"
-
-echo ""
-log_warning "Чтобы отменить изменения, выполните:"
-echo "   mv ${BUILD_SCRIPT}.backup $BUILD_SCRIPT"
-echo "   mv ${INDEX_HTML}.backup $INDEX_HTML"
-echo "   mv ${STATS_HTML}.backup $STATS_HTML"
