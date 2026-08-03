@@ -13,6 +13,10 @@ SOURCE_DIR="${SOURCE_DIR%/}"
 
 mkdir -p "$WEB_DIR/full" "$WEB_DIR/thumb"
 
+# Очистка осиротевших файлов: удаляем старые full/thumb, чтобы не скапливались
+# файлы от удалённых из Source оригиналов
+rm -f "$WEB_DIR"/full/* "$WEB_DIR"/thumb/* 2>/dev/null || true
+
 # Проверка ImageMagick
 if ! command -v convert &> /dev/null; then
     echo "Error: ImageMagick not installed. Run: brew install imagemagick"

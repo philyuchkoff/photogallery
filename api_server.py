@@ -223,11 +223,11 @@ def delete_photos():
             filepath.unlink()
             deleted.append(photo_path)
             
-            # Удаляем миниатюру если есть
-            thumb_name = filepath.stem + '.jpg'
-            thumb_path = WEB_DIR / 'thumb' / thumb_name
-            if thumb_path.exists():
-                thumb_path.unlink()
+            # Удаляем миниатюру и full-версию если есть
+            for sub_dir in ('thumb', 'full'):
+                cached = WEB_DIR / sub_dir / (filepath.stem + '.jpg')
+                if cached.exists():
+                    cached.unlink()
     
     return jsonify({'success': True, 'deleted': len(deleted)})
 
